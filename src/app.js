@@ -28,9 +28,6 @@ inicializarDB();
 
 const client = redis.createClient(REDIS_PORT);
 
-
-client.connect();
-
 client.on("connect", function() {
     console.log("Conexión exitosa con Redis.");
 });
@@ -39,35 +36,34 @@ client.on("error", function(err) {
     console.error("Error de conexión con Redis:", err);
 });
 
+client.connect();
+
 
 
 // Middleware para agregar caché utilizando Redis
-app.use((req, res, next) => {
+app.use(async (req, res, next) => {
     const cacheKey = req.url;
+    console.log(cacheKey)
 
     // Consultar la caché de Redis
-    client.get(cacheKey, (err, data) => {
-        if (err) throw err;
-
-        if (data !== null) {
-            // Si los datos están en caché, enviar la respuesta desde Redis
-            res.send(data);
-        } else {
-            // Si los datos no están en caché, pasar al siguiente middleware
-            next();
-        }
-    });
+    const cacheResponse = await client.get(cacheKey)
+    if(cacheResponse){
+        console.log("Respuest DEL CACHE: ", cacheResponse)
+        res.send(cacheResponse)
+    }else{
+        next()
+    }
 });
 
 // Middleware para guardar en caché la respuesta en Redis
 app.use((req, res, next) => {
     const cacheKey = req.url;
-
+    
     // Capturar la respuesta antes de enviarla al cliente
     const originalSend = res.send;
     res.send = (body) => {
         // Guardar la respuesta en la caché de Redis
-        client.setex(cacheKey, 3600, body); // Aquí estamos configurando un tiempo de vida de 1 hora (3600 segundos) para la caché.
+        client.setEx(cacheKey, 3600, body); // Aquí estamos configurando un tiempo de vida de 1 hora (3600 segundos) para la caché.
         originalSend.call(res, body);
     };
 
